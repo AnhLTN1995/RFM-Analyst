@@ -1,0 +1,38 @@
+WITH master_customer AS
+(
+    SELECT 
+        SalesOrderID,
+        OrderDate,
+        CustomerID, 
+        TotalDue,
+        MAX(OrderDate) OVER (ORDER BY OrderDate DESC) MaxDate,
+        DATEDIFF(DAY, OrderDate, MAX(OrderDate) OVER (ORDER BY OrderDate DESC)) Date_Diff
+    FROM Sales.SalesOrderHeader SOH
+)
+, RFM_Score AS
+(
+    SELECT 
+        CustomerID, 
+        MIN(Date_Diff) Recency,
+        NTILE(5) OVER(ORDER BY MIN(Date_Diff) DESC) R_Score,
+        COUNT(SalesOrderID) Frequency,
+        NTILE(5) OVER(ORDER BY COUNT(SalesOrderID)) F_Score,
+        SUM(TotalDue) Moneytary,
+        NTILE(5) OVER(ORDER BY SUM(TotalDue)) M_Score
+    FROM master_customer
+    GROUP BY CustomerID
+)
+SELECT
+    CustomerID,
+    R_Score,
+    F_Score,
+    M_Score,
+    CONCAT(R_Score, F_Score, M_Score) AS RFM_Score,
+    Segment_Scores.Segment
+INTO #Segment_Temp
+FROM RFM_Score
+LEFT JOIN dbo.Segment_Scores
+    ON CONCAT(R_Score, F_Score, M_Score) = Segment_Scores.Scores;
+
+SELECT *
+FROM #Segment_Temp
